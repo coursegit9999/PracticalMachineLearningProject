@@ -1,0 +1,100 @@
+---
+title: "Practical Machine Learning"
+author: "WL"
+date: "Sunday, December 21, 2014"
+output: html_document
+---
+
+In this project I will use the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants who were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The project goal is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. 
+
+Some additional information on this dataset can be obtained from the [original data source](http://groupware.les.inf.puc-rio.br/har#weight_lifting_exercises). A review of this additional information finds the following details:
+
+*Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).*
+
+Load libraries and set the working directory:
+
+```{r, message=FALSE, warning=FALSE}
+library("dplyr")
+library("caret")
+setwd("D:/R/RClass/PMLProject")
+```
+
+Load raw training and test data:
+
+```{r, cache=TRUE}
+rawTrain <- read.csv("pml-training.csv")
+rawTest <- read.csv("pml-testing.csv")
+```
+
+#### Variable Choices
+
+After loading the data a summary of the data using **summary(rawTrain)** was printed and examined to obtain an overview of the dataset. It was found that a large number of the **160** variables have blank or NA variables. These variables would contribute little to the analysis and can be removed. This brought the resulting dataset to **59** variables. Further, analysis revealed that roll, pitch, yaw, and total acceleration variables are actually calculated based upon gyros, accel, and magnet (x,y,z) variables. As the calculated variables would contain predictive infromation from the underlying variables and be highly correlated with the raw x,y,z details, only the calculated variables will be utilized. Eliminating the user, timestamps, and windows variables as unneccessary brings the dataset down to **17** variables (including the classe variable) that will be used for creation of a model to predict whether the weight lifting was properly executed. 
+
+Selection of the final variables:
+
+```{r, cache=TRUE}
+tmpTrain <- select( rawTrain, 
+                    classe,
+                    roll_belt, pitch_belt, yaw_belt, total_accel_belt,
+                    roll_arm, pitch_arm, yaw_arm, total_accel_arm,
+                    roll_dumbbell, pitch_dumbbell, yaw_dumbbell, total_accel_dumbbell,
+                    roll_forearm, pitch_forearm, yaw_forearm, total_accel_forearm)  
+```
+
+#### Model Creation
+
+The model will be created using a common subset of 60% for training and 40% of data for cross validation and testing. The model selected for prediction is the Random Forrest method due to the large number of predictors with potential relationships, the classification nature of the problem, and the general accuracy of Random Forrest models.
+
+```{r, cache=TRUE, message=FALSE, warning=FALSE}
+inTrain <- createDataPartition( tmpTrain$classe, p=0.6, list=FALSE)
+training <- tmpTrain[inTrain,]
+testing <- tmpTrain[-inTrain,]
+modFitRF <- train(classe ~ . , data=training, method="rf")
+```
+
+#### Cross-Validation and Out of Sample Error
+
+Next the generated model will be cross-validated by predicting values for the test dataset and these will be compared to the actual results for the test dataset. A confusion matrix will be generated for use in assessing the accuracy of these predictions. 
+
+```{r, cache=TRUE}
+predRF <- predict(modFitRF, testing)
+```
+
+```{r}
+CM <- confusionMatrix(predRF,testing$classe)
+accuracy <- CM$overall[[1]]
+```
+
+The overall accuracy of the predictions for this model is **`r accuracy`** and the out of sample error rate would be expected to be approximately **`r 1-accuracy`**. The full confusion matrix can be viewed below:
+
+```{r}
+CM
+```
+
+#### Predict Project Answers
+
+Next I will use the developed model to predict answers to the 20 questions provided for this project and then write them out to the required files.
+
+```{r}
+tmpTest <- select( rawTest, 
+                    roll_belt, pitch_belt, yaw_belt, total_accel_belt,
+                    roll_arm, pitch_arm, yaw_arm, total_accel_arm,
+                    roll_dumbbell, pitch_dumbbell, yaw_dumbbell, total_accel_dumbbell,
+                    roll_forearm, pitch_forearm, yaw_forearm, total_accel_forearm)
+tmpAnswers <- predict(modFitRF, tmpTest)
+answers <- as.character(tmpAnswers)
+    
+setwd("D:/R/RClass/PMLProject/answers")
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(answers)
+```
+
+
